@@ -1,0 +1,4 @@
+transformers
+seaborn
+wandb
+sentencepiece
