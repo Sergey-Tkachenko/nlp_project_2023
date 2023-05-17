@@ -8,13 +8,7 @@ import torch
 import wandb
 import transformers
 from tqdm import tqdm
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score
-)
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 
 @dataclass
@@ -44,14 +38,15 @@ class Trainer:
         self.model = model
         self.optimizer = optimizer
 
-    def train(self, train_dataloader: torch.utils.data.DataLoader,
-              val_dataloader: torch.utils.data.DataLoader,
-              config: TrainConfig, wandb_project: str) -> None:
+    def train(
+        self,
+        train_dataloader: torch.utils.data.DataLoader,
+        val_dataloader: torch.utils.data.DataLoader,
+        config: TrainConfig,
+        wandb_project: str,
+    ) -> None:
 
-        wandb.init(
-            project=wandb_project,
-            config=asdict(config)
-        )
+        wandb.init(project=wandb_project, config=asdict(config))
 
         self.model.to(config.device)
 
@@ -79,7 +74,7 @@ class Trainer:
 
             for batch in tqdm(dataloader):
                 labels.append(batch["labels"])
-                
+
                 batch = Trainer._move_dict_items_to_device(batch, self.model.device)
 
                 outputs = self.model(**batch)
@@ -93,21 +88,22 @@ class Trainer:
         return {key: target_dict[key].squeeze().to(device) for key in target_dict}
 
     # TODO: get rid of manual metric specification
-    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader,
-                        return_labels: bool = True):
-        
+    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
+
         logits, labels = self.make_inference(dataloader)
 
         predicted_probas = torch.softmax(logits, dim=-1).numpy()
         predicted_labels = torch.argmax(logits, dim=-1).numpy()
 
-        wandb.log({
-            "accuracy": accuracy_score(labels, predicted_labels),
-            "f1": f1_score(labels, predicted_labels),
-            "recall": recall_score(labels, predicted_labels),
-            "precision": precision_score(labels, predicted_labels),
-            "auc_score": roc_auc_score(labels, predicted_probas[:, 1])
-        })
+        wandb.log(
+            {
+                "accuracy": accuracy_score(labels, predicted_labels),
+                "f1": f1_score(labels, predicted_labels),
+                "recall": recall_score(labels, predicted_labels),
+                "precision": precision_score(labels, predicted_labels),
+                "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
+            }
+        )
 
     def make_train_step(self, dataloader: torch.utils.data.DataLoader):
 
@@ -119,7 +115,7 @@ class Trainer:
             batch = Trainer._move_dict_items_to_device(batch, self.model.device)
 
             outputs = self.model(**batch)
-            
+
             loss = outputs["loss"]
             loss.backward()
 
@@ -150,7 +146,7 @@ class Trainer:
             {
                 Trainer.checkpoint_field_model: self.model.state_dict(),
                 Trainer.checkpoint_field_optimizer: self.optimizer.state_dict(),
-                Trainer.checkpoint_field_epoch: epoch
+                Trainer.checkpoint_field_epoch: epoch,
             },
-            checkpoint_name
+            checkpoint_name,
         )
