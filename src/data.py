@@ -43,4 +43,4 @@ class PairedSentenceDataset(torch.utils.data.Dataset):
 
 
 def build_tokenizer(model: str):
-    return transformers.AutoTokenizer.from_pretrained(model)
+    return transformers.AutoTokenizer.from_pretrained(model, use_fast=False)
