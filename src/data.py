@@ -1,6 +1,69 @@
+from abc import abstractmethod
+import os
+
 import torch
 import transformers
 import pandas as pd
+
+
+class ParaphraseDataset:
+    def __init__(self, path):
+        self.path = path
+        self.train_sets = []
+        self.val_sets = []
+        self.test_sets = []
+        self.train_df = None
+        self.val_df = None
+        self.test_df = None
+    
+    @abstractmethod
+    def add_train_set(self, name):
+        pass
+    
+    @abstractmethod
+    def add_val_set(self, name):
+        pass
+    
+    @abstractmethod
+    def add_test_set(self, name):
+        pass
+    
+    @abstractmethod
+    def compile_dataset(self):
+        pass
+
+
+class PawsParaphraseDataset(ParaphraseDataset):
+    def __init__(self, path: str):
+        super().__init__(path)
+        self.possible_sets = [
+            'labeled_final_validation.csv',
+            'unlabeled_final_train.csv',
+            'unlabeled_final_validation.csv',
+            'labeled_swap_train.csv',
+            'labeled_final_train.csv',
+            'labeled_final_test.csv',
+        ]
+        
+    def add_train_set(self, name):
+        if name not in self.possible_sets:
+            assert(f'supported datasets: {self.possible_sets}')
+        self.train_sets.append(pd.read_csv(os.path.join(self.path, name)))
+        
+    def add_val_set(self, name):
+        if name not in self.possible_sets:
+            assert(f'supported datasets: {self.possible_sets}')
+        self.val_sets.append(pd.read_csv(os.path.join(self.path, name)))
+        
+    def add_test_set(self, name):
+        if name not in self.possible_sets:
+            assert(f'supported datasets: {self.possible_sets}')
+        self.test_sets.append(pd.read_csv(os.path.join(self.path, name)))
+        
+    def compile_dataset(self):
+        self.train_df = pd.concat(self.train_sets)
+        self.val_df = pd.concat(self.val_sets)
+        self.test_df = pd.concat(self.test_sets)
 
 
 class PairedSentenceDataset(torch.utils.data.Dataset):
