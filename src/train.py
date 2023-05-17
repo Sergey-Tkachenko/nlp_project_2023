@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import wandb
 import transformers
-import tqdm
+from tqdm import tqdm
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
