@@ -45,10 +45,14 @@ class PawsParaphraseDataset(ParaphraseDataset):
             "labeled_final_test.csv",
         ]
 
-    def add_train_set(self, name):
+    def add_train_set(self, name, n = -1):
         if name not in self.possible_sets:
             assert f"supported datasets: {self.possible_sets}"
-        self.train_sets.append(pd.read_csv(os.path.join(self.path, name)))
+
+        if n < 0:
+            self.train_sets.append(pd.read_csv(os.path.join(self.path, name)))
+        else:
+            self.train_sets.append(pd.read_csv(os.path.join(self.path, name))[:n])
 
     def add_val_set(self, name):
         if name not in self.possible_sets:
