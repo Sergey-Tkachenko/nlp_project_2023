@@ -128,7 +128,7 @@ class Trainer:
         checkpoint_path = Path(folder) / Trainer.checkpoint_last_name
 
         if not os.path.exists(checkpoint_path):
-            warnings.warn("No checkpoints found. Start epoch 0 with given model and optimizer.")
+            warnings.warn(f"No checkpoints found {checkpoint_path}. Start epoch 0 with given model and optimizer.")
 
             return -1
 
