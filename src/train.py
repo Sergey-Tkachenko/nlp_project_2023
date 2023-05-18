@@ -129,9 +129,9 @@ class Trainer:
 
         if not os.path.exists(checkpoint_path):
             warnings.warn(f"No checkpoints found {checkpoint_path}. Start epoch 0 with given model and optimizer.")
-
             return -1
 
+        warnings.warn(f"Using checkpoint from {checkpoint_path}.")
         checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
 
         self.model.load_state_dict(checkpoint[Trainer.checkpoint_field_model])
