@@ -132,7 +132,7 @@ class Trainer:
 
             return -1
 
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
 
         self.model.load_state_dict(checkpoint[Trainer.checkpoint_field_model])
         self.optimizer.load_state_dict(checkpoint[Trainer.checkpoint_field_optimizer])
