@@ -59,7 +59,7 @@ class Trainer:
         for epoch in range(start_epoch, config.epochs):
             self.make_train_step(train_dataloader)
             self.make_evaluation_step(val_dataloader)
-            self.make_evaluation_step(test_loader)
+            self.make_evaluation_step(test_loader, is_test=True)
 
             self.save_checkpoint(config.checkpoints_folder, epoch)
 
