@@ -116,7 +116,7 @@ class Trainer:
 
                 logits = self._convert_to_logits_if_needed(self.model(**batch))
 
-                predicts.append(logits)
+                predicts.append(logits.cpu())
 
         return torch.cat(predicts), torch.cat(labels).squeeze()
 
