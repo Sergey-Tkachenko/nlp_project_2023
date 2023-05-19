@@ -125,9 +125,8 @@ class Trainer:
         return {key: target_dict[key].squeeze().to(device) for key in target_dict}
 
     # TODO: get rid of manual metric specification
-    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader,
-                        return_labels: bool = True):
-        
+    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
+
         logits, labels = self.make_inference(dataloader)
 
         predicted_probas = torch.softmax(logits, dim=-1).numpy()
@@ -167,11 +166,11 @@ class Trainer:
         checkpoint_path = Path(folder) / Trainer.checkpoint_last_name
 
         if not os.path.exists(checkpoint_path):
-            warnings.warn("No checkpoints found. Start epoch 0 with given model and optimizer.")
-
+            warnings.warn(f"No checkpoints found {checkpoint_path}. Start epoch 0 with given model and optimizer.")
             return -1
 
-        checkpoint = torch.load(checkpoint_path)
+        warnings.warn(f"Using checkpoint from {checkpoint_path}.")
+        checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
 
         self.model.load_state_dict(checkpoint[Trainer.checkpoint_field_model])
         self.optimizer.load_state_dict(checkpoint[Trainer.checkpoint_field_optimizer])
@@ -185,7 +184,7 @@ class Trainer:
             {
                 Trainer.checkpoint_field_model: self.model.state_dict(),
                 Trainer.checkpoint_field_optimizer: self.optimizer.state_dict(),
-                Trainer.checkpoint_field_epoch: epoch
+                Trainer.checkpoint_field_epoch: epoch,
             },
             checkpoint_name
         )
