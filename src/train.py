@@ -10,13 +10,7 @@ import torch
 import wandb
 import transformers
 from tqdm.notebook import tqdm
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score
-)
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from transformers.modeling_outputs import BaseModelOutput, SequenceClassifierOutput
 
 
@@ -77,9 +71,13 @@ class Trainer:
         self.loss_function = torch.nn.CrossEntropyLoss()
         self.logger = logger
 
-    def train(self, train_dataloader: torch.utils.data.DataLoader,
-              val_dataloader: torch.utils.data.DataLoader,
-              config: TrainConfig) -> None:
+    def train(
+        self,
+        train_dataloader: torch.utils.data.DataLoader,
+        val_dataloader: torch.utils.data.DataLoader,
+        config: TrainConfig,
+        test_dataloader: torch.utils.data.DataLoader | None = None,
+    ) -> None:
 
         self.model.to(config.device)
 
@@ -92,10 +90,12 @@ class Trainer:
             self.make_train_step(train_dataloader)
 
             self.make_evaluation_step(val_dataloader)
+            if test_dataloader is not None:
+                self.make_evaluation_step(test_dataloader, is_test=True)
 
             self.save_checkpoint(config.checkpoints_folder, epoch)
 
-    def _convert_to_logits_if_needed(self, output = SequenceClassifierOutput | torch.Tensor):
+    def _convert_to_logits_if_needed(self, output=SequenceClassifierOutput | torch.Tensor):
         if isinstance(output, SequenceClassifierOutput):
             return output["logits"]
         else:
@@ -125,20 +125,35 @@ class Trainer:
         return {key: target_dict[key].squeeze().to(device) for key in target_dict}
 
     # TODO: get rid of manual metric specification
-    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
+    def make_evaluation_step(
+        self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True, is_test: bool = False
+    ):
 
         logits, labels = self.make_inference(dataloader)
 
         predicted_probas = torch.softmax(logits, dim=-1).numpy()
         predicted_labels = torch.argmax(logits, dim=-1).numpy()
 
-        self.logger.log({
-            "accuracy": accuracy_score(labels, predicted_labels),
-            "f1": f1_score(labels, predicted_labels),
-            "recall": recall_score(labels, predicted_labels),
-            "precision": precision_score(labels, predicted_labels),
-            "auc_score": roc_auc_score(labels, predicted_probas[:, 1])
-        })
+        if is_test:
+           self.logger.log(
+            {
+                "test_accuracy": accuracy_score(labels, predicted_labels),
+                "test_f1": f1_score(labels, predicted_labels),
+                "test_recall": recall_score(labels, predicted_labels),
+                "test_precision": precision_score(labels, predicted_labels),
+                "test_auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
+            }
+        )
+        else: 
+            self.logger.log(
+                {
+                    "accuracy": accuracy_score(labels, predicted_labels),
+                    "f1": f1_score(labels, predicted_labels),
+                    "recall": recall_score(labels, predicted_labels),
+                    "precision": precision_score(labels, predicted_labels),
+                    "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
+                }
+            )
 
     def make_train_step(self, dataloader: torch.utils.data.DataLoader):
 
@@ -150,7 +165,7 @@ class Trainer:
             batch = Trainer._move_dict_items_to_device(batch, self.model.device)
 
             labels = batch.pop("labels")
-    
+
             logits = self._convert_to_logits_if_needed(self.model(**batch))
 
             loss = self.loss_function(logits, labels)
@@ -186,5 +201,5 @@ class Trainer:
                 Trainer.checkpoint_field_optimizer: self.optimizer.state_dict(),
                 Trainer.checkpoint_field_epoch: epoch,
             },
-            checkpoint_name
+            checkpoint_name,
         )
