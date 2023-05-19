@@ -42,6 +42,7 @@ class Trainer:
         self,
         train_dataloader: torch.utils.data.DataLoader,
         val_dataloader: torch.utils.data.DataLoader,
+        test_loader: torch.utils.data.DataLoader,
         config: TrainConfig,
         wandb_project: str,
     ) -> None:
@@ -57,8 +58,8 @@ class Trainer:
 
         for epoch in range(start_epoch, config.epochs):
             self.make_train_step(train_dataloader)
-
             self.make_evaluation_step(val_dataloader)
+            self.make_evaluation_step(test_loader)
 
             self.save_checkpoint(config.checkpoints_folder, epoch)
 
@@ -88,22 +89,35 @@ class Trainer:
         return {key: target_dict[key].squeeze().to(device) for key in target_dict}
 
     # TODO: get rid of manual metric specification
-    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
+    def make_evaluation_step(
+        self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True, is_test: bool = False
+    ):
 
         logits, labels = self.make_inference(dataloader)
 
         predicted_probas = torch.softmax(logits, dim=-1).numpy()
         predicted_labels = torch.argmax(logits, dim=-1).numpy()
 
-        wandb.log(
-            {
-                "accuracy": accuracy_score(labels, predicted_labels),
-                "f1": f1_score(labels, predicted_labels),
-                "recall": recall_score(labels, predicted_labels),
-                "precision": precision_score(labels, predicted_labels),
-                "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
-            }
-        )
+        if is_test:
+            wandb.log(
+                {
+                    "test_accuracy": accuracy_score(labels, predicted_labels),
+                    "test_f1": f1_score(labels, predicted_labels),
+                    "test_recall": recall_score(labels, predicted_labels),
+                    "test_precision": precision_score(labels, predicted_labels),
+                    "test_auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
+                }
+            )
+        else:
+            wandb.log(
+                {
+                    "accuracy": accuracy_score(labels, predicted_labels),
+                    "f1": f1_score(labels, predicted_labels),
+                    "recall": recall_score(labels, predicted_labels),
+                    "precision": precision_score(labels, predicted_labels),
+                    "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
+                }
+            )
 
     def make_train_step(self, dataloader: torch.utils.data.DataLoader):
 
