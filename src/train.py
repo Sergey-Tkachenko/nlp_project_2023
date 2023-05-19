@@ -2,12 +2,14 @@ import os
 import warnings
 from dataclasses import dataclass, asdict
 from pathlib import Path
+from abc import ABC, abstractmethod
+from typing import Any
 
 import numpy as np
 import torch
 import wandb
 import transformers
-import tqdm
+from tqdm.notebook import tqdm
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -15,6 +17,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score
 )
+from transformers.modeling_outputs import BaseModelOutput, SequenceClassifierOutput
 
 
 @dataclass
@@ -30,6 +33,33 @@ class TrainConfig:
     lr: float
 
 
+class Logger(ABC):
+    @abstractmethod
+    def log(self, data: dict[Any]):
+        pass
+
+    def finish(self):
+        pass
+
+
+class DummyLogger(Logger):
+    def log(self, data: dict[Any, Any]):
+        pass
+
+
+class WandbLogger(Logger):
+    def __init__(self, project: str, experiment_config: TrainConfig) -> None:
+        super().__init__()
+
+        wandb.init(project=project, config=experiment_config)
+
+    def log(self, data: dict[Any, Any]):
+        wandb.log(data)
+
+    def finish(self):
+        wandb.finish()
+
+
 class Trainer:
     checkpoint_field_model: str = "model"
     checkpoint_field_optimizer: str = "optimizer"
@@ -40,18 +70,16 @@ class Trainer:
     # TODO add logging of the best
     checkpoint_best_name: str = "best.tar"
 
-    def __init__(self, model: transformers.DebertaModel, optimizer: torch.optim.Optimizer) -> None:
+    def __init__(self, model: transformers.DebertaModel, optimizer: torch.optim.Optimizer, logger: Logger) -> None:
         self.model = model
         self.optimizer = optimizer
 
+        self.loss_function = torch.nn.CrossEntropyLoss()
+        self.logger = logger
+
     def train(self, train_dataloader: torch.utils.data.DataLoader,
               val_dataloader: torch.utils.data.DataLoader,
-              config: TrainConfig, wandb_project: str) -> None:
-
-        wandb.init(
-            project=wandb_project,
-            config=asdict(config)
-        )
+              config: TrainConfig) -> None:
 
         self.model.to(config.device)
 
@@ -67,7 +95,11 @@ class Trainer:
 
             self.save_checkpoint(config.checkpoints_folder, epoch)
 
-        wandb.finish()
+    def _convert_to_logits_if_needed(self, output = SequenceClassifierOutput | torch.Tensor):
+        if isinstance(output, SequenceClassifierOutput):
+            return output["logits"]
+        else:
+            return output
 
     def make_inference(self, dataloader: torch.utils.data.DataLoader) -> tuple:
 
@@ -78,13 +110,13 @@ class Trainer:
             labels = []
 
             for batch in tqdm(dataloader):
-                labels.append(batch["labels"])
-                
+                labels.append(batch.pop("labels"))
+
                 batch = Trainer._move_dict_items_to_device(batch, self.model.device)
 
-                outputs = self.model(**batch)
+                logits = self._convert_to_logits_if_needed(self.model(**batch))
 
-                predicts.append(outputs["logits"].cpu())
+                predicts.append(logits)
 
         return torch.cat(predicts), torch.cat(labels).squeeze()
 
@@ -101,7 +133,7 @@ class Trainer:
         predicted_probas = torch.softmax(logits, dim=-1).numpy()
         predicted_labels = torch.argmax(logits, dim=-1).numpy()
 
-        wandb.log({
+        self.logger.log({
             "accuracy": accuracy_score(labels, predicted_labels),
             "f1": f1_score(labels, predicted_labels),
             "recall": recall_score(labels, predicted_labels),
@@ -118,12 +150,15 @@ class Trainer:
 
             batch = Trainer._move_dict_items_to_device(batch, self.model.device)
 
-            outputs = self.model(**batch)
-            
-            loss = outputs["loss"]
+            labels = batch.pop("labels")
+    
+            logits = self._convert_to_logits_if_needed(self.model(**batch))
+
+            loss = self.loss_function(logits, labels)
+
             loss.backward()
 
-            wandb.log({"train_loss": loss.detach().cpu().numpy()})
+            self.logger.log({"train_loss": loss.detach().cpu().numpy()})
 
             self.optimizer.step()
 
