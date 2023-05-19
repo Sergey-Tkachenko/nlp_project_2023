@@ -75,8 +75,8 @@ class Trainer:
         self,
         train_dataloader: torch.utils.data.DataLoader,
         val_dataloader: torch.utils.data.DataLoader,
-        test_dataloader: torch.utils.data.DataLoader | None,
         config: TrainConfig,
+        test_dataloader: torch.utils.data.DataLoader | None = None,
     ) -> None:
 
         self.model.to(config.device)
