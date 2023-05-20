@@ -189,3 +189,30 @@ class ConcatenatePooler(BaseClassificationHead):
         concatenated = ConcatenatePooler._concat_along_axis(cls_tokens)
 
         return self.classifier(concatenated)
+
+
+class LSTMPooler(BaseClassificationHead):
+    def __init__(self, output_percetpron_sizes: list[int],
+                 input_hid_size: int, lstm_hid_size: int, lstm_num_layers, bidir: bool = True) -> None:
+        super().__init__()
+
+        self.lstm = torch.nn.LSTM(
+            input_size=input_hid_size,
+            hidden_size=lstm_hid_size,
+            num_layers=lstm_num_layers,
+            batch_first=False,
+            bidirectional=bidir
+        )
+
+        self.classifier = build_perceptron(output_percetpron_sizes)
+    
+    def forward(self, model_outputs: BaseModelOutput, **inputs: dict[Any, Any]):
+        cls_hidden_states = torch.stack([hidden_state[:, 0] for hidden_state in model_outputs.hidden_states])
+
+        print("cls_hidden_states", cls_hidden_states.shape)
+
+        _, (features_from_each_layer, _) = self.lstm(cls_hidden_states)
+
+        concatenated_features = ConcatenatePooler._concat_along_axis(features_from_each_layer)
+
+        return self.classifier(concatenated_features)
