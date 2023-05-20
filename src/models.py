@@ -140,3 +140,30 @@ class MeanMaxPooler(BaseClassificationHead):
         all_features = torch.cat([cls_embeddings, mean_embeddings, max_embeddings], dim=1)
 
         return self.classifier(all_features)
+    
+
+class ConvPooler(BaseClassificationHead):
+    def __init__(self, conv_sizes: list[int], output_perceptron_sizes: list[int],
+                 kernel_size: int = 3, padding: int = 1) -> None:
+        super().__init__()
+
+        self.conv_net = torch.nn.Sequential()
+
+        for prev_hid_dim, next_hid_dim in zip(conv_sizes[:-1], conv_sizes[1:]):
+            self.conv_net.extend(
+                [torch.nn.Conv1d(in_channels=prev_hid_dim, out_channels=next_hid_dim,
+                                kernel_size=kernel_size, padding=1),
+                torch.nn.BatchNorm1d(next_hid_dim),
+                torch.nn.ReLU()]
+            )
+        
+        self.classifier = build_perceptron(output_perceptron_sizes)
+    
+    def forward(self, model_outputs: BaseModelOutput, **inputs: dict[Any, Any]):
+        cls_embeddings = model_outputs.last_hidden_state[:, 1]
+
+        other_embeddings = model_outputs.last_hidden_state[:, 1:]
+
+        conv_output = torch.max(self.conv_net(other_embeddings.permute(0, 2, 1)), dim=2)[0]
+
+        return self.classifier(torch.cat([cls_embeddings, conv_output], dim=-1))
