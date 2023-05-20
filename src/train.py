@@ -64,6 +64,8 @@ class Trainer:
     checkpoint_last_name: str = "last.tar"
     checkpoint_best_name: str = "best.tar"
 
+    target_metric: str = "f1"
+
     def __init__(self, model: transformers.DebertaModel, optimizer: torch.optim.Optimizer, logger: Logger) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -97,11 +99,11 @@ class Trainer:
 
             self.save_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name), epoch)
 
-            if metrics["accuracy"] > best_accuracy:
+            if metrics[self.target_metric] > best_accuracy:
                 self.logger.log({"current_best_epoch": epoch})
 
                 self.save_checkpoint(best_path, epoch)
-                best_accuracy = metrics["accuracy"]
+                best_accuracy = metrics[self.target_metric]
 
         # use best for evaluation on test
         if not os.path.exists(best_path):
@@ -109,7 +111,7 @@ class Trainer:
 
             best_path = self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name)
 
-        self.load_checkpoint(best_path)
+        self.load_checkpoint(best_path, True)
 
         test_metrics = self.make_evaluation_step(test_dataloader)
         test_metrics = {"test_" + name: test_metrics[name] for name in test_metrics}
@@ -189,7 +191,7 @@ class Trainer:
 
             self.optimizer.step()
 
-    def load_checkpoint(self, checkpoint_path: Path) -> int:
+    def load_checkpoint(self, checkpoint_path: Path, model_only: bool=False) -> int:
 
         if not os.path.exists(checkpoint_path):
             warnings.warn(f"No checkpoints found {checkpoint_path}. Start epoch 0 with given model and optimizer.")
@@ -199,6 +201,10 @@ class Trainer:
         checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
 
         self.model.load_state_dict(checkpoint[Trainer.checkpoint_field_model])
+
+        if model_only:
+            return -1
+
         self.optimizer.load_state_dict(checkpoint[Trainer.checkpoint_field_optimizer])
 
         return checkpoint[Trainer.checkpoint_field_epoch]
