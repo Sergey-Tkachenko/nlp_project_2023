@@ -26,6 +26,8 @@ class TrainConfig:
 
     lr: float
 
+    others: dict
+
 
 class Logger(ABC):
     @abstractmethod
@@ -60,8 +62,6 @@ class Trainer:
     checkpoint_field_epoch: int = "epoch"
 
     checkpoint_last_name: str = "last.tar"
-
-    # TODO add logging of the best
     checkpoint_best_name: str = "best.tar"
 
     def __init__(self, model: transformers.DebertaModel, optimizer: torch.optim.Optimizer, logger: Logger) -> None:
@@ -76,7 +76,7 @@ class Trainer:
         train_dataloader: torch.utils.data.DataLoader,
         val_dataloader: torch.utils.data.DataLoader,
         config: TrainConfig,
-        test_dataloader: torch.utils.data.DataLoader | None = None,
+        test_dataloader: torch.utils.data.DataLoader,
     ) -> None:
 
         self.model.to(config.device)
@@ -84,22 +84,47 @@ class Trainer:
         if not os.path.exists(config.checkpoints_folder):
             os.makedirs(config.checkpoints_folder)
 
-        start_epoch = self.load_checkpoint(config.checkpoints_folder) + 1
+        start_epoch = self.load_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name)) + 1
+
+        best_accuracy = 0
+        best_path = self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_best_name)
 
         for epoch in range(start_epoch, config.epochs):
             self.make_train_step(train_dataloader)
 
-            self.make_evaluation_step(val_dataloader)
-            if test_dataloader is not None:
-                self.make_evaluation_step(test_dataloader, is_test=True)
+            metrics = self.make_evaluation_step(val_dataloader)
+            self.logger.log(metrics)
 
-            self.save_checkpoint(config.checkpoints_folder, epoch)
+            self.save_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name), epoch)
+
+            if metrics["accuracy"] > best_accuracy:
+                self.logger.log({"current_best_epoch": epoch})
+
+                self.save_checkpoint(best_path, epoch)
+                best_accuracy = metrics["accuracy"]
+
+        # use best for evaluation on test
+        if not os.path.exists(best_path):
+            warnings.warn("Best checkpoint have not been found, using the last one.")
+
+            best_path = self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name)
+
+        self.load_checkpoint(best_path)
+
+        test_metrics = self.make_evaluation_step(test_dataloader)
+        test_metrics = {"test_" + name: test_metrics[name] for name in test_metrics}
+
+        self.logger.log(test_metrics)
 
     def _convert_to_logits_if_needed(self, output=SequenceClassifierOutput | torch.Tensor):
         if isinstance(output, SequenceClassifierOutput):
             return output["logits"]
         else:
             return output
+    
+    @staticmethod
+    def _build_checkpoint_path(folder: str, name: str):
+        return Path(folder) / name
 
     def make_inference(self, dataloader: torch.utils.data.DataLoader) -> tuple:
 
@@ -126,34 +151,22 @@ class Trainer:
 
     # TODO: get rid of manual metric specification
     def make_evaluation_step(
-        self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True, is_test: bool = False
-    ):
+        self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
 
         logits, labels = self.make_inference(dataloader)
 
         predicted_probas = torch.softmax(logits, dim=-1).numpy()
         predicted_labels = torch.argmax(logits, dim=-1).numpy()
 
-        if is_test:
-           self.logger.log(
-            {
-                "test_accuracy": accuracy_score(labels, predicted_labels),
-                "test_f1": f1_score(labels, predicted_labels),
-                "test_recall": recall_score(labels, predicted_labels),
-                "test_precision": precision_score(labels, predicted_labels),
-                "test_auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
-            }
-        )
-        else: 
-            self.logger.log(
-                {
-                    "accuracy": accuracy_score(labels, predicted_labels),
-                    "f1": f1_score(labels, predicted_labels),
-                    "recall": recall_score(labels, predicted_labels),
-                    "precision": precision_score(labels, predicted_labels),
-                    "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
-                }
-            )
+        metrics_dict = {
+            "accuracy": accuracy_score(labels, predicted_labels),
+            "f1": f1_score(labels, predicted_labels),
+            "recall": recall_score(labels, predicted_labels),
+            "precision": precision_score(labels, predicted_labels),
+            "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
+        }
+        
+        return metrics_dict
 
     def make_train_step(self, dataloader: torch.utils.data.DataLoader):
 
@@ -176,9 +189,7 @@ class Trainer:
 
             self.optimizer.step()
 
-    def load_checkpoint(self, folder: str) -> int:
-
-        checkpoint_path = Path(folder) / Trainer.checkpoint_last_name
+    def load_checkpoint(self, checkpoint_path: Path) -> int:
 
         if not os.path.exists(checkpoint_path):
             warnings.warn(f"No checkpoints found {checkpoint_path}. Start epoch 0 with given model and optimizer.")
@@ -192,8 +203,7 @@ class Trainer:
 
         return checkpoint[Trainer.checkpoint_field_epoch]
 
-    def save_checkpoint(self, folder: str, epoch: int) -> None:
-        checkpoint_name = Path(folder) / Trainer.checkpoint_last_name
+    def save_checkpoint(self, checkpoint_path: Path, epoch: int) -> None:
 
         torch.save(
             {
@@ -201,5 +211,5 @@ class Trainer:
                 Trainer.checkpoint_field_optimizer: self.optimizer.state_dict(),
                 Trainer.checkpoint_field_epoch: epoch,
             },
-            checkpoint_name,
+            checkpoint_path,
         )
