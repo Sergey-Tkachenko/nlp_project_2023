@@ -209,8 +209,6 @@ class LSTMPooler(BaseClassificationHead):
     def forward(self, model_outputs: BaseModelOutput, **inputs: dict[Any, Any]):
         cls_hidden_states = torch.stack([hidden_state[:, 0] for hidden_state in model_outputs.hidden_states])
 
-        print("cls_hidden_states", cls_hidden_states.shape)
-
         _, (features_from_each_layer, _) = self.lstm(cls_hidden_states)
 
         concatenated_features = ConcatenatePooler._concat_along_axis(features_from_each_layer)
