@@ -167,3 +167,25 @@ class ConvPooler(BaseClassificationHead):
         conv_output = torch.max(self.conv_net(other_embeddings.permute(0, 2, 1)), dim=2)[0]
 
         return self.classifier(torch.cat([cls_embeddings, conv_output], dim=-1))
+
+
+class ConcatenatePooler(BaseClassificationHead):
+    def __init__(self, output_perceptron_sizes: list[int], count_last_layers_to_use: int = 4) -> None:
+        super().__init__()
+
+        self.classifier = build_perceptron(output_perceptron_sizes)
+
+        self.count_last_layers_to_use = count_last_layers_to_use
+
+    @staticmethod
+    def _concat_along_axis(tensor: torch.Tensor):
+        """[L, BATCHS_SIZE, HID_DIM] -> [BATCH_SIZE, L * HID_DIM]"""
+    
+        return tensor.permute(1, 0, 2).reshape((tensor.shape[1], -1))
+
+    def forward(self, model_outputs: BaseModelOutput, **inputs: dict[Any, Any]):
+        cls_tokens = torch.stack(model_outputs.hidden_states)[-self.count_last_layers_to_use:, :, 0]
+
+        concatenated = ConcatenatePooler._concat_along_axis(cls_tokens)
+
+        return self.classifier(concatenated)
