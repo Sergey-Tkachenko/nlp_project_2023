@@ -36,9 +36,10 @@ class ParaphraseDataset:
     def concat_datasets(sets):
         pass
 
-    @abstractmethod
     def compile_dataset(self):
-        pass
+        self.train_df = self.concat_datasets(self.train_sets)
+        self.val_df = self.concat_datasets(self.val_sets)
+        self.test_df = self.concat_datasets(self.test_sets)
 
 
 class PawsParaphraseDataset(ParaphraseDataset):
@@ -64,11 +65,6 @@ class PawsParaphraseDataset(ParaphraseDataset):
             ]
         )
 
-    def compile_dataset(self):
-        self.train_df = self.concat_datasets(self.train_sets)
-        self.val_df = self.concat_datasets(self.val_sets)
-        self.test_df = self.concat_datasets(self.test_sets)
-
 
 class PawsQQPParaphraseDataset(ParaphraseDataset):
     def __init__(self, path: str):
@@ -90,11 +86,6 @@ class PawsQQPParaphraseDataset(ParaphraseDataset):
                 for dataset_path, n_rows in sets
             ]
         )
-
-    def compile_dataset(self):
-        self.train_df = self.concat_datasets(self.train_sets)
-        self.val_df = self.concat_datasets(self.val_sets)
-        self.test_df = self.concat_datasets(self.test_sets)
 
 
 class DatasetManager:
