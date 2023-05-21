@@ -302,3 +302,64 @@ class TwoLSTMPooler(BaseClassificationHead):
         concatenated_embeddings = torch.cat([cls_embeddings] + sentence_embeddings, dim=-1)
 
         return self.classifier(concatenated_embeddings)
+
+
+class ConcatenatePoolerWithLSTM(BaseClassificationHead):
+    def __init__(self, tokenwise_lstm_config: LSTMconfig, output_percetpron_sizes: list[int], count_last_layers_to_use: int = 4) -> None:
+        super().__init__()
+
+        self.tokenwise_lstm = torch.nn.LSTM(
+            input_size=tokenwise_lstm_config.input_hid_size,
+            hidden_size=tokenwise_lstm_config.lstm_hid_size,
+            num_layers=tokenwise_lstm_config.lstm_num_layers,
+            batch_first=False,
+            bidirectional=tokenwise_lstm_config.bidir
+        )
+
+        self.classifier = build_perceptron(output_percetpron_sizes)
+
+        self.count_last_layers_to_use = count_last_layers_to_use
+
+    @staticmethod
+    def _mask_sentences(sequence_embeddings: torch.Tensor,
+                       token_type_ids: torch.LongTensor, input_attention_mask: torch.LongTensor):
+        """
+        Args:
+            sequence_embeddings: torch.Tensor of shape [SEQ_LENGTH, BATCH_SIZE, HID_DIM],
+
+            token_type_ids: torch.LongTensor of shape [BATCH_SIZE, SEQ_LENGTH]
+
+            attention_masks: torch.LongTensor of shape [BATCH_SIZE, SEQ_LENGTH]
+        """
+
+        token_type_ids = token_type_ids.unsqueeze(-1).permute((1, 0, 2))
+
+        input_attention_mask = input_attention_mask.unsqueeze(-1).permute((1, 0, 2))
+
+        masked_sentences = (
+            sequence_embeddings * input_attention_mask *  token_type_ids,
+            sequence_embeddings * input_attention_mask * (1 - token_type_ids)
+        )
+
+        return masked_sentences
+
+    def forward(self, model_outputs: BaseModelOutput, **inputs: dict[Any, Any]):
+        hidden_states = torch.cat(model_outputs.hidden_states[-self.count_last_layers_to_use:], dim=-1).permute(1, 0, 2) # [SEQ_LENGTH, BATCH_SIZE, 4 * HID_DIM]
+
+        cls_embeddings = hidden_states[0]
+
+        masked_lstm_outputs = TwoLSTMPooler._mask_sentences(hidden_states[1:],
+                                                            inputs["token_type_ids"][:, 1:],
+                                                            inputs["attention_mask"][:, 1:])
+
+        sentence_embeddings = []
+        for sentence_masked in masked_lstm_outputs:
+            _, (layer_states, _) = self.tokenwise_lstm(sentence_masked)
+
+            sentence_embeddings.append(
+                ConcatenatePooler._concat_along_axis(layer_states)
+            )
+
+        concatenated_embeddings = torch.cat([cls_embeddings] + sentence_embeddings, dim=-1)
+
+        return self.classifier(concatenated_embeddings)
