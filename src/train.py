@@ -25,6 +25,9 @@ class TrainConfig:
     max_length: int
 
     lr: float
+    test_sets: list
+    val_sets: list
+    train_sets: list
 
     others: dict
 
