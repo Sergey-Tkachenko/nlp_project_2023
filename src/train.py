@@ -100,6 +100,10 @@ class Trainer:
             metrics = self.make_evaluation_step(val_dataloader)
             self.logger.log(metrics)
 
+            test_metrics = self.make_evaluation_step(test_dataloader)
+            test_metrics = {"test_" + name: test_metrics[name] for name in test_metrics}
+            self.logger.log(test_metrics)
+
             self.save_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name), epoch)
 
             if metrics[self.target_metric] > best_accuracy:
@@ -111,15 +115,9 @@ class Trainer:
         # use best for evaluation on test
         if not os.path.exists(best_path):
             warnings.warn("Best checkpoint have not been found, using the last one.")
-
             best_path = self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name)
 
         self.load_checkpoint(best_path, True)
-
-        test_metrics = self.make_evaluation_step(test_dataloader)
-        test_metrics = {"test_" + name: test_metrics[name] for name in test_metrics}
-
-        self.logger.log(test_metrics)
 
     def _convert_to_logits_if_needed(self, output=SequenceClassifierOutput | torch.Tensor):
         if isinstance(output, SequenceClassifierOutput):
