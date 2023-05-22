@@ -89,7 +89,9 @@ class Trainer:
         if not os.path.exists(config.checkpoints_folder):
             os.makedirs(config.checkpoints_folder)
 
-        start_epoch = self.load_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name)) + 1
+        start_epoch = (
+            self.load_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name)) + 1
+        )
 
         best_accuracy = 0
         best_path = self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_best_name)
@@ -104,7 +106,9 @@ class Trainer:
             test_metrics = {"test_" + name: test_metrics[name] for name in test_metrics}
             self.logger.log(test_metrics)
 
-            self.save_checkpoint(self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name), epoch)
+            self.save_checkpoint(
+                self._build_checkpoint_path(config.checkpoints_folder, self.checkpoint_last_name), epoch
+            )
 
             if metrics[self.target_metric] > best_accuracy:
                 self.logger.log({"current_best_epoch": epoch})
@@ -124,7 +128,7 @@ class Trainer:
             return output["logits"]
         else:
             return output
-    
+
     @staticmethod
     def _build_checkpoint_path(folder: str, name: str):
         return Path(folder) / name
@@ -153,8 +157,7 @@ class Trainer:
         return {key: target_dict[key].squeeze().to(device) for key in target_dict}
 
     # TODO: get rid of manual metric specification
-    def make_evaluation_step(
-        self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
+    def make_evaluation_step(self, dataloader: torch.utils.data.DataLoader, return_labels: bool = True):
 
         logits, labels = self.make_inference(dataloader)
 
@@ -168,7 +171,7 @@ class Trainer:
             "precision": precision_score(labels, predicted_labels),
             "auc_score": roc_auc_score(labels, predicted_probas[:, 1]),
         }
-        
+
         return metrics_dict
 
     def make_train_step(self, dataloader: torch.utils.data.DataLoader):
@@ -192,7 +195,7 @@ class Trainer:
 
             self.optimizer.step()
 
-    def load_checkpoint(self, checkpoint_path: Path, model_only: bool=False) -> int:
+    def load_checkpoint(self, checkpoint_path: Path, model_only: bool = False) -> int:
 
         if not os.path.exists(checkpoint_path):
             warnings.warn(f"No checkpoints found {checkpoint_path}. Start epoch 0 with given model and optimizer.")

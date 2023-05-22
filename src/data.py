@@ -106,7 +106,7 @@ class DatasetManager:
 class PairedSentenceDataset(torch.utils.data.Dataset):
     def __init__(self, table: pd.DataFrame, tokenizer: transformers.PreTrainedTokenizer, max_length: int):
         super().__init__()
-        
+
         self.first_sentences = table["sentence1"].values
         self.second_sentences = table["sentence2"].values
 

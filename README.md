@@ -20,9 +20,9 @@ Kaggle allows to use GPU for training and wandb allows to visualize metrics. Jus
 
 ## Tips to use this repo
 - We provide a simple framework to work with paraphrase detection datasets.
-It is easy to add new datasets to our provided framework. See ```PawsParaphraseDataset``` and ```PawsQQPParaphraseDataset``` [here](/src/data.py)
+It is easy to add new datasets. See ```PawsParaphraseDataset``` and ```PawsQQPParaphraseDataset``` [here](/src/data.py)
 
-- Also, we provide both W&B and Dummy logger - to run and test your code
+- We provide both W&B and Dummy logger - to run and test your code
 
 - Best checkpoints are saved in checkpoints_folder as "best.tar". You may use this checkpoints to finetune models. Simply copy one of the checkpoints to checkpoints_folder. 
 
